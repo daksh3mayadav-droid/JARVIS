@@ -16,7 +16,7 @@ pygetwindow==0.0.9
 
 # Screen Capture & Vision
 mss==9.0.1
-Pillow==10.3.0
+Pillow==12.1.1
 easyocr==1.7.1
 pytesseract==0.3.10
 
