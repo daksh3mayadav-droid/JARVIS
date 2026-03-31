@@ -1,0 +1,60 @@
+# JARVIS AI Assistant - Requirements
+# All packages are free and open-source
+# Target: HP Pavilion Gaming 15 (Ryzen 5 5600H, GTX 1650, 16GB RAM, Windows 11)
+
+# Speech Recognition (offline)
+vosk==0.3.45
+sounddevice==0.4.6
+
+# Text-to-Speech (offline)
+pyttsx3==2.90
+
+# GUI Automation
+pyautogui==0.9.54
+keyboard==0.13.5
+pygetwindow==0.0.9
+
+# Screen Capture & Vision
+mss==9.0.1
+Pillow==10.3.0
+easyocr==1.7.1
+pytesseract==0.3.10
+
+# System Monitoring
+psutil==5.9.8
+GPUtil==1.4.0
+
+# System Tray
+pystray==0.19.5
+
+# File System Watching
+watchdog==4.0.0
+
+# Terminal UI
+rich==13.7.1
+
+# Configuration
+pyyaml==6.0.1
+
+# Numeric Computing
+numpy==1.26.4
+
+# HTTP Requests (for Ollama API)
+requests==2.31.0
+
+# Database (built-in sqlite3 is used, no extra package needed)
+
+# Optional: PyTorch for EasyOCR GPU support
+# Install separately based on your CUDA version:
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# Optional: OpenCV for advanced vision
+opencv-python==4.9.0.80
+
+# Fuzzy string matching
+thefuzz==0.22.1
+python-Levenshtein==0.25.1
+
+# Windows-specific (will be ignored on non-Windows)
+pywin32==306; sys_platform == "win32"
+comtypes==1.4.1; sys_platform == "win32"
