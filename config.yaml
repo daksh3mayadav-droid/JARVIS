@@ -5,10 +5,10 @@ jarvis:
   version: "1.0.0"
 
 llm:
-  model: "phi"
+  model: "mistral"
   api_url: "http://localhost:11434"
   temperature: 0.7
-  max_tokens: 2048
+  max_tokens: 256
   timeout: 60
   retry_attempts: 3
 
