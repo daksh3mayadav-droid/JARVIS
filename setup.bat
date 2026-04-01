@@ -103,29 +103,30 @@ if errorlevel 1 (
 
 :: ─── Pull LLM Model ────────────────────────────────────────────────────────────
 echo.
-echo [6/9] Pulling LLM model (phi - optimized for GTX 1650 4GB VRAM)...
-echo [INFO] This downloads ~1.6GB. Please wait...
+echo [6/9] Pulling LLM model (mistral - recommended for instruction following)...
+echo [INFO] This downloads ~4.1GB. Please wait...
 start "" /B ollama serve >nul 2>&1
 timeout /t 3 /nobreak >nul
-ollama pull phi
+ollama pull mistral
 if errorlevel 1 (
-    echo [WARNING] phi model failed. Trying mistral:instruct as fallback...
-    ollama pull mistral:instruct
+    echo [WARNING] mistral model failed. Trying phi as fallback...
+    ollama pull phi
     if errorlevel 1 (
-        echo [WARNING] Could not pull models. Start Ollama manually and run: ollama pull phi
+        echo [WARNING] Could not pull models. Start Ollama manually and run: ollama pull mistral
     ) else (
-        echo [OK] mistral:instruct model ready.
-        :: Update config to use mistral
-        powershell -Command "(Get-Content config.yaml) -replace 'model: .phi.', 'model: \"mistral:instruct\"' | Set-Content config.yaml"
+        echo [OK] phi model ready (fallback).
+        :: Update config to use phi
+        powershell -Command "(Get-Content config.yaml) -replace 'model: .mistral.', 'model: \"phi\"' | Set-Content config.yaml"
     )
 ) else (
-    echo [OK] phi model ready.
+    echo [OK] mistral model ready.
 )
 
 :: ─── Download Vosk Model ───────────────────────────────────────────────────────
 echo.
 echo [7/9] Downloading Vosk speech recognition model...
-if exist "models\vosk-model-small-en-us-0.15" (
+set VOSK_MODEL_DIR=models\vosk-model-small-en-us-0.15
+if exist "%VOSK_MODEL_DIR%" (
     echo [OK] Vosk model already present.
 ) else (
     mkdir models 2>nul

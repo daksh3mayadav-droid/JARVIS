@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import json
 import queue
+import re
 import threading
 import time
+from datetime import datetime
 from typing import Any, Callable, Optional
 
 import requests
@@ -60,6 +62,13 @@ AVAILABLE CAPABILITIES:
 - search: search files, web (via browser)
 - conversation: general chat and questions
 
+CRITICAL RULES:
+1. NEVER write more than 3 sentences in your response field.
+2. ALWAYS respond with valid JSON. No other text before or after.
+3. For action requests, focus on the action — not explaining things.
+4. If unsure, use intent "conversation" with a SHORT response.
+5. Keep response under 50 words.
+
 RESPONSE FORMAT:
 Always respond with a JSON object in this format:
 {
@@ -80,7 +89,8 @@ class Brain:
     Central reasoning engine for JARVIS.
 
     Manages:
-    - LLM connection via Ollama API
+    - Local keyword-based intent classification (works without LLM)
+    - LLM connection via Ollama API (for complex/ambiguous requests)
     - Intent classification and dispatch
     - Conversation history (last 20 messages)
     - Async task queue for long operations
@@ -106,10 +116,10 @@ class Brain:
         config = get_config()
         llm_cfg = config.get("llm", {})
 
-        self.model = llm_cfg.get("model", "phi")
+        self.model = llm_cfg.get("model", "mistral")
         self.api_url = llm_cfg.get("api_url", "http://localhost:11434")
         self.temperature = llm_cfg.get("temperature", 0.7)
-        self.max_tokens = llm_cfg.get("max_tokens", 2048)
+        self.max_tokens = llm_cfg.get("max_tokens", 256)
         self.timeout = llm_cfg.get("timeout", 60)
         self.retry_attempts = llm_cfg.get("retry_attempts", 3)
 
@@ -143,15 +153,151 @@ class Brain:
         """Bulk-register action handlers."""
         self._action_registry.update(registry)
 
+    # ─── Local Intent Classification ──────────────────────────────────────
+
+    def _classify_intent_local(self, user_input: str) -> Optional[dict]:
+        """
+        Keyword-based intent classification that works WITHOUT the LLM.
+
+        Matches common command patterns via regex/keywords and returns an
+        action dict directly, skipping the LLM entirely for obvious commands.
+
+        Args:
+            user_input: Raw user input text.
+
+        Returns:
+            Action dict with keys (intent, action, parameters) and optionally
+            direct_response, or None if no keyword match was found.
+        """
+        text = user_input.lower().strip()
+
+        # --- Settings shortcuts (check before generic app launch) ---
+        if text in ("open settings", "settings", "windows settings"):
+            return {"intent": "settings", "action": "open_settings", "parameters": {"page": ""}}
+        if "wifi" in text or "wi-fi" in text:
+            return {"intent": "settings", "action": "toggle_wifi", "parameters": {}}
+        if "bluetooth" in text:
+            return {"intent": "settings", "action": "toggle_bluetooth", "parameters": {}}
+
+        # --- App launch ---
+        for trigger in ("open ", "launch ", "start ", "run "):
+            if text.startswith(trigger):
+                app_name = text[len(trigger):].strip()
+                # Avoid matching "open http..." as app launch
+                if app_name and not app_name.startswith("http"):
+                    return {
+                        "intent": "app_launch",
+                        "action": "open_app",
+                        "parameters": {"app_name": app_name},
+                    }
+
+        # --- YouTube / music ---
+        if "youtube" in text or text.startswith("play "):
+            query = text
+            for remove in (
+                "play ", "on youtube", "from youtube", "in youtube",
+                "on edge", "in edge", "on chrome", "in chrome",
+                "please", "search for ", "search ",
+            ):
+                query = query.replace(remove, "")
+            query = query.strip()
+            if query:
+                return {
+                    "intent": "search",
+                    "action": "play_youtube",
+                    "parameters": {"query": query},
+                }
+
+        # --- Google search ---
+        if text.startswith("search ") or text.startswith("google "):
+            query = (
+                text.replace("search ", "")
+                    .replace("google ", "")
+                    .replace("for ", "", 1)
+                    .strip()
+            )
+            if query:
+                return {
+                    "intent": "search",
+                    "action": "google_search",
+                    "parameters": {"query": query},
+                }
+
+        # --- URL navigation ---
+        if text.startswith("go to ") or text.startswith("open http"):
+            url = text.replace("go to ", "").replace("open ", "").strip()
+            if not url.startswith("http"):
+                url = "https://" + url
+            return {
+                "intent": "search",
+                "action": "open_url",
+                "parameters": {"url": url},
+            }
+
+        # --- System info ---
+        if any(kw in text for kw in ("cpu", "processor")):
+            return {"intent": "information", "action": "get_cpu", "parameters": {}}
+        if any(kw in text for kw in ("ram", "memory usage")):
+            return {"intent": "information", "action": "get_ram", "parameters": {}}
+        if any(kw in text for kw in ("battery", "charge level")):
+            return {"intent": "information", "action": "get_battery", "parameters": {}}
+        if any(kw in text for kw in ("gpu", "graphics card")):
+            return {"intent": "information", "action": "get_gpu", "parameters": {}}
+        if any(kw in text for kw in ("system info", "specs", "hardware info")):
+            return {"intent": "information", "action": "get_system_info", "parameters": {}}
+
+        # --- Screenshot ---
+        if any(kw in text for kw in ("screenshot", "screen capture", "capture screen")):
+            return {"intent": "vision", "action": "take_screenshot", "parameters": {}}
+
+        # --- Settings ---
+        if "setting" in text:
+            return {"intent": "settings", "action": "open_settings", "parameters": {"page": ""}}
+        if "volume" in text:
+            nums = re.findall(r"\d+", text)
+            level = int(nums[0]) if nums else 50
+            return {"intent": "settings", "action": "set_volume", "parameters": {"level": level}}
+        if "brightness" in text:
+            nums = re.findall(r"\d+", text)
+            level = int(nums[0]) if nums else 70
+            return {"intent": "settings", "action": "set_brightness", "parameters": {"level": level}}
+
+        # --- Lock screen ---
+        if "lock" in text and any(kw in text for kw in ("screen", "computer", "laptop", "pc")):
+            return {"intent": "settings", "action": "lock_screen", "parameters": {}}
+
+        # --- File search ---
+        if any(kw in text for kw in ("find file", "search file", "locate ")):
+            query = text
+            for remove in ("find file", "search file", "locate ", "find ", "search "):
+                query = query.replace(remove, "")
+            return {
+                "intent": "file_ops",
+                "action": "search_files",
+                "parameters": {"query": query.strip()},
+            }
+
+        # --- Time / Date ---
+        if any(kw in text for kw in ("what time", "current time", "what date", "today's date", "what day")):
+            now = datetime.now()
+            return {
+                "intent": "conversation",
+                "action": "",
+                "parameters": {},
+                "direct_response": now.strftime("It's %I:%M %p, %A, %B %d, %Y."),
+            }
+
+        return None  # No keyword match — fall through to LLM
+
     # ─── Main Processing ──────────────────────────────────────────────────
 
     def process(self, user_input: str) -> str:
         """
         Process a user message end-to-end.
 
-        1. Add to conversation context + memory
-        2. Query the LLM
-        3. Parse the structured JSON response
+        1. Try local keyword classification first (no LLM needed)
+        2. If no keyword match, query the LLM
+        3. Parse the structured JSON response from LLM
         4. Execute the specified action (with safety check)
         5. Return the TARS-style response string
 
@@ -165,10 +311,34 @@ class Brain:
             return self.personality.respond("Say something.")
 
         log.info("Processing: %s", user_input[:100])
+
+        # Step 1: Try local keyword classification FIRST (no LLM required)
+        local_match = self._classify_intent_local(user_input)
+        if local_match:
+            if "direct_response" in local_match:
+                response = self.personality.respond(local_match["direct_response"])
+            else:
+                action = local_match.get("action", "")
+                params = local_match.get("parameters", {})
+                if action and action in self._action_registry:
+                    exec_result = self._execute_action(action, params)
+                    response = exec_result if exec_result else self.personality.respond(f"Done.")
+                else:
+                    log.warning("Local match action '%s' not in registry.", action)
+                    response = self.personality.respond(
+                        f"I understood the command but '{action}' isn't available yet."
+                    )
+
+            self._add_context("user", user_input)
+            self._add_context("assistant", response)
+            self.memory.add_message("user", user_input)
+            self.memory.add_message("assistant", response)
+            return response
+
+        # Step 2: For complex/ambiguous requests, use LLM
         self._add_context("user", user_input)
         self.memory.add_message("user", user_input)
 
-        # Query LLM
         llm_raw = self._query_llm(user_input)
         if not llm_raw:
             return self.personality.error("No response from LLM. Is Ollama running?")
@@ -176,8 +346,15 @@ class Brain:
         # Parse structured response
         parsed = safe_json_parse(llm_raw)
         if not parsed or not isinstance(parsed, dict):
-            # Fallback: treat raw text as conversation response
-            response = self.personality.respond(llm_raw)
+            # LLM returned non-JSON — truncate to max 3 sentences.
+            # Split on sentence-ending punctuation followed by whitespace,
+            # to avoid breaking on abbreviations or decimal numbers.
+            clean = llm_raw.replace("\n", " ").strip()
+            sentence_parts = re.split(r"(?<=[.!?])\s+", clean)
+            truncated = " ".join(sentence_parts[:3]).strip()
+            if truncated and truncated[-1] not in ".!?":
+                truncated += "."
+            response = self.personality.respond(truncated)
             self._add_context("assistant", response)
             self.memory.add_message("assistant", response)
             return response
@@ -407,3 +584,4 @@ class Brain:
         if self._worker_thread and self._worker_thread.is_alive():
             self._worker_thread.join(timeout=3)
         log.info("Brain shut down.")
+

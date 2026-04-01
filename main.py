@@ -154,6 +154,12 @@ class JARVIS:
             # Browser
             "open_url": lambda url="": self.browser.open_url(url),
             "google_search": lambda query="": self.browser.google_search(query),
+            "youtube_search": lambda query="": self.browser.open_url(
+                f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+            ),
+            "play_youtube": lambda query="": self.browser.open_url(
+                f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+            ),
 
             # Windows settings
             "open_settings": lambda page="": self.windows_nav.open_settings(page),
