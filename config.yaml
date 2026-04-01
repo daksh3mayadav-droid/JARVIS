@@ -1,0 +1,48 @@
+jarvis:
+  name: "JARVIS"
+  wake_word: "jarvis"
+  humor_level: 75
+  version: "1.0.0"
+
+llm:
+  model: "phi"
+  api_url: "http://localhost:11434"
+  temperature: 0.7
+  max_tokens: 2048
+  timeout: 60
+  retry_attempts: 3
+
+voice:
+  enabled: true
+  engine: "pyttsx3"
+  rate: 175
+  volume: 0.9
+  voice_index: 0
+  vosk_model_path: "models/vosk-model-small-en-us-0.15"
+  silence_timeout: 1.5
+  activation_beep: true
+
+vision:
+  enabled: true
+  capture_fps: 1
+  ocr_engine: "easyocr"
+  screenshot_dir: "data/screenshots"
+  change_threshold: 30
+
+system:
+  safe_mode: true
+  log_level: "INFO"
+  memory_db: "data/jarvis_memory.db"
+  file_index_db: "data/file_index.db"
+  action_delay: 0.05
+  human_typing_speed: 0.03
+
+interface:
+  theme: "dark"
+  show_dashboard: true
+  hotkey: "ctrl+shift+j"
+  tray_icon: true
+
+automation:
+  scripts_dir: "data/automations"
+  recordings_dir: "data/recordings"

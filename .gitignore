@@ -1,0 +1,48 @@
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+
+# Runtime data
+data/*.db
+data/screenshots/*.png
+data/screenshots/*.jpg
+data/recordings/
+
+# Logs
+logs/*.log
+logs/*.log.*
+
+# AI models (large files, downloaded by setup.bat)
+models/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Environment files
+.env
+*.env
+
+# Temporary files
+*.tmp
+tmp/
