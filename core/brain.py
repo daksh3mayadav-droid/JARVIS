@@ -65,7 +65,6 @@ PARAM_ALIASES: dict[str, str] = {
     "app":               "app_name",
     "application":       "app_name",
     "application_name":  "app_name",
-    "name":              "app_name",
     # path variants
     "filepath":          "path",
     "file_path":         "path",
@@ -920,7 +919,11 @@ class Brain:
             )
             try:
                 if parameters:
-                    first_value = next(iter(parameters.values()))
+                    first_key, first_value = next(iter(parameters.items()))
+                    log.warning(
+                        "Fallback: calling '%s' with first param '%s' positionally.",
+                        action, first_key,
+                    )
                     result = handler(first_value)
                 else:
                     result = handler()
