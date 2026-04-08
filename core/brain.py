@@ -45,6 +45,11 @@ ACTION_ALIASES: dict[str, tuple[str, dict]] = {
     "play_video":           ("play_youtube",    {}),
     "play_song":            ("play_youtube",    {}),
     "play_music":           ("play_youtube",    {}),
+    # Mouse aliases
+    "mouse_click":          ("click",           {}),
+    "mouse click":          ("click",           {}),
+    "left_click":           ("click",           {}),
+    "right_click":          ("right_click",     {}),
 }
 
 # ─── Parameter Name Normalisation ────────────────────────────────────────────
@@ -315,6 +320,54 @@ class Brain:
                         "parameters": {"app_name": app_name},
                     }
 
+        # --- Mouse control (checked before YouTube controls to avoid "click" conflicts) ---
+        _mouse_controls: dict[str, str] = {
+            "double click":  "double_click",
+            "right click":   "right_click",
+            "mouse click":   "click",
+            "left click":    "click",
+            "scroll down":   "scroll_down",
+            "scroll up":     "scroll_up",
+            "click":         "click",
+        }
+        for phrase, mouse_action in sorted(_mouse_controls.items(), key=lambda x: -len(x[0])):
+            if phrase in text:
+                return {"intent": "system_control", "action": mouse_action, "parameters": {}}
+
+        # --- Window control ---
+        _window_controls: dict[str, str] = {
+            "minimize window":  "minimize_window",
+            "maximize window":  "maximize_window",
+            "close window":     "close_window",
+            "switch window":    "switch_window",
+            "alt tab":          "switch_window",
+            "snap left":        "snap_left",
+            "snap right":       "snap_right",
+            "show desktop":     "show_desktop",
+            "task view":        "task_view",
+            "minimize":         "minimize_window",
+            "maximize":         "maximize_window",
+        }
+        for phrase, win_action in sorted(_window_controls.items(), key=lambda x: -len(x[0])):
+            if phrase in text:
+                return {"intent": "system_control", "action": win_action, "parameters": {}}
+
+        # --- Browser tab control (checked before YouTube controls so "next tab" beats "next") ---
+        _tab_controls: dict[str, str] = {
+            "previous tab":  "prev_tab",
+            "refresh page":  "refresh_page",
+            "close tab":     "close_tab",
+            "next tab":      "next_tab",
+            "new tab":       "new_tab",
+            "prev tab":      "prev_tab",
+            "go forward":    "go_forward",
+            "browser back":  "go_back",
+            "refresh":       "refresh_page",
+        }
+        for phrase, tab_action in sorted(_tab_controls.items(), key=lambda x: -len(x[0])):
+            if phrase in text:
+                return {"intent": "system_control", "action": tab_action, "parameters": {}}
+
         # --- YouTube control commands (checked BEFORE generic play/youtube) ---
         _yt_controls: dict[str, str] = {
             # Playback
@@ -389,6 +442,9 @@ class Brain:
             "open shorts":          "yt_shorts",
             "youtube music":        "yt_music",
             "open youtube music":   "yt_music",
+            # Ad skip (must be before plain "skip")
+            "skip ads":             "yt_skip_ad",
+            "skip ad":              "yt_skip_ad",
         }
         # Longest phrase first so "pause the video" beats "pause"
         for phrase, yt_action in sorted(_yt_controls.items(), key=lambda x: -len(x[0])):
@@ -402,11 +458,14 @@ class Brain:
         # --- YouTube / music ---
         if "youtube" in text or text.startswith("play "):
             query = text
-            for remove in (
-                "play ", "on youtube", "from youtube", "in youtube",
-                "on edge", "in edge", "on chrome", "in chrome",
-                "please", "search for ", "search ",
-            ):
+            for remove in [
+                "play ", "on youtube", "from youtube", "form youtube",
+                "frome youtube", "in youtube", "on the youtube",
+                "from the youtube", "on edge", "in edge",
+                "on chrome", "in chrome", "please", "search for ",
+                "search ", "for me", "can you", "could you",
+                "jarvis ", "hey ", "find ",
+            ]:
                 query = query.replace(remove, "")
             query = query.strip()
             if query:

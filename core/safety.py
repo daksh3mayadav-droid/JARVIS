@@ -57,6 +57,15 @@ _SAFE_KEYWORDS = (
     "toggle_wifi", "toggle_bluetooth", "set_volume", "set_brightness",
     # App control
     "open_app",
+    # Mouse control
+    "click", "right_click", "double_click", "scroll_up", "scroll_down",
+    "mouse_click",
+    # Window control
+    "minimize_window", "maximize_window", "close_window", "switch_window",
+    "snap_left", "snap_right", "show_desktop", "task_view",
+    # Browser tab control
+    "new_tab", "close_tab", "next_tab", "prev_tab", "refresh_page",
+    "go_back", "go_forward",
 )
 
 

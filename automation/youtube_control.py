@@ -7,6 +7,8 @@ and URL navigation via BrowserControl.
 
 from __future__ import annotations
 
+import time
+
 from utils.logger import get_logger
 
 log = get_logger("automation.youtube")
@@ -168,6 +170,41 @@ class YouTubeController:
         url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
         self.browser.open_url(url)
         return f"Searching YouTube for '{query}'."
+
+    def search_and_play(self, query: str) -> str:
+        """Search YouTube and auto-play the first result."""
+        url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+        self.browser.open_url(url)
+        time.sleep(3)  # Wait for page to load
+        try:
+            import pyautogui
+            screen_width, screen_height = pyautogui.size()
+            # First video result is roughly at 40% from left, 40% from top
+            click_x = int(screen_width * 0.4)
+            click_y = int(screen_height * 0.4)
+            time.sleep(0.5)
+            pyautogui.click(click_x, click_y)
+            log.info("Auto-clicked first result for: %s", query)
+            return f"Playing '{query}' on YouTube."
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Auto-play click failed: %s", exc)
+            return f"Searched YouTube for '{query}'. Click the video to play."
+
+    def skip_ad(self) -> str:
+        """Try to skip YouTube ad by clicking the Skip Ad button area."""
+        time.sleep(0.5)
+        try:
+            import pyautogui
+            screen_w, screen_h = pyautogui.size()
+            # Skip Ad button is usually bottom-right of the video player
+            skip_x = int(screen_w * 0.85)
+            skip_y = int(screen_h * 0.78)
+            pyautogui.click(skip_x, skip_y)
+            log.info("Attempted to skip ad.")
+            return "Attempted to skip ad."
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Skip ad failed: %s", exc)
+            return "Could not skip ad."
 
     def open_youtube(self) -> str:
         """Open the YouTube homepage."""

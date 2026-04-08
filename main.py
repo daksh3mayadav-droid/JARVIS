@@ -225,10 +225,8 @@ class JARVIS:
             # Browser
             "open_url": lambda url="": self.browser.open_url(url),
             "google_search": lambda query="": self.browser.google_search(query),
-            "youtube_search": lambda query="": self.browser.open_url(
-                f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
-            ),
-            "play_youtube": lambda query="": self.youtube.search(query) if query else self.youtube.open_youtube(),
+            "youtube_search": lambda query="": self.youtube.search(query),
+            "play_youtube": lambda query="": self.youtube.search_and_play(query) if query else self.youtube.open_youtube(),
 
             # YouTube — Playback
             "yt_play_pause":    lambda: self.youtube.play_pause(),
@@ -273,6 +271,7 @@ class JARVIS:
             "yt_music":         lambda: self.youtube.open_music(),
             "yt_search":        lambda query="": self.youtube.search(query),
             "yt_timestamp":     lambda position=5: self.youtube.go_to_timestamp(int(position)),
+            "yt_skip_ad":       lambda: self.youtube.skip_ad(),
 
             # Windows settings
             "open_settings": lambda page="": self.windows_nav.open_settings(page),
@@ -281,6 +280,33 @@ class JARVIS:
             "toggle_wifi": lambda: self.windows_nav.toggle_wifi(),
             "toggle_bluetooth": lambda: self.windows_nav.toggle_bluetooth(),
             "lock_screen": lambda: self.windows_nav.lock_screen(),
+
+            # Mouse control
+            "click":        lambda: self.controller.click(),
+            "mouse_click":  lambda: self.controller.click(),
+            "right_click":  lambda: self.controller.right_click(),
+            "double_click": lambda: self.controller.double_click(),
+            "scroll_up":    lambda: self.controller.scroll(3),
+            "scroll_down":  lambda: self.controller.scroll(-3),
+
+            # Window control
+            "minimize_window": lambda: self.controller.hotkey("win", "down"),
+            "maximize_window": lambda: self.controller.hotkey("win", "up"),
+            "close_window":    lambda: self.controller.hotkey("alt", "F4"),
+            "switch_window":   lambda: self.controller.hotkey("alt", "tab"),
+            "snap_left":       lambda: self.controller.hotkey("win", "left"),
+            "snap_right":      lambda: self.controller.hotkey("win", "right"),
+            "show_desktop":    lambda: self.controller.hotkey("win", "d"),
+            "task_view":       lambda: self.controller.hotkey("win", "tab"),
+
+            # Browser tab control
+            "new_tab":      lambda: self.browser.new_tab(),
+            "close_tab":    lambda: self.browser.close_tab(),
+            "next_tab":     lambda: self.browser.next_tab(),
+            "prev_tab":     lambda: self.browser.prev_tab(),
+            "refresh_page": lambda: self.browser.refresh(),
+            "go_back":      lambda: self.browser.go_back(),
+            "go_forward":   lambda: self.browser.go_forward(),
 
             # Input control
             "type_text": lambda text="": self.controller.type_text(text),
