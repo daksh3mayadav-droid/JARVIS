@@ -95,6 +95,7 @@ class JARVIS:
         self._file_manager = None
         self._automator = None
         self._browser = None
+        self._youtube = None
 
         # ── Voice ──────────────────────────────────────────────────────────
         # Load Vosk model once and share between Listener and WakeWordDetector
@@ -184,6 +185,14 @@ class JARVIS:
             self._browser = BrowserControl()
         return self._browser
 
+    @property
+    def youtube(self):
+        """Lazy-load YouTubeController on first access."""
+        if self._youtube is None:
+            from automation.youtube_control import YouTubeController
+            self._youtube = YouTubeController(self.controller, self.browser)
+        return self._youtube
+
     # ─── Action Registry ──────────────────────────────────────────────────────
 
     def _register_actions(self) -> None:
@@ -219,9 +228,51 @@ class JARVIS:
             "youtube_search": lambda query="": self.browser.open_url(
                 f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
             ),
-            "play_youtube": lambda query="": self.browser.open_url(
-                f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+            "play_youtube": lambda query="": self.youtube.search(query) if query else self.youtube.open_youtube(),
+
+            # YouTube — Playback
+            "yt_play_pause":    lambda: self.youtube.play_pause(),
+            "yt_play":          lambda: self.youtube.play(),
+            "yt_pause":         lambda: self.youtube.pause(),
+            "yt_skip_forward":  lambda seconds=5: self.youtube.skip_forward(int(seconds)),
+            "yt_skip_backward": lambda seconds=5: self.youtube.skip_backward(int(seconds)),
+            "yt_next_video":    lambda: self.youtube.next_video(),
+            "yt_previous_video": lambda: self.youtube.previous_video(),
+            "yt_restart":       lambda: self.youtube.restart_video(),
+
+            # YouTube — Volume
+            "yt_volume_up":   lambda: self.youtube.volume_up(),
+            "yt_volume_down": lambda: self.youtube.volume_down(),
+            "yt_mute":        lambda: self.youtube.mute_unmute(),
+
+            # YouTube — Display
+            "yt_fullscreen":      lambda: self.youtube.fullscreen(),
+            "yt_exit_fullscreen": lambda: self.youtube.exit_fullscreen(),
+            "yt_theater":         lambda: self.youtube.theater_mode(),
+            "yt_miniplayer":      lambda: self.youtube.miniplayer(),
+
+            # YouTube — Captions & Speed
+            "yt_captions":      lambda: self.youtube.toggle_captions(),
+            "yt_speed_up":      lambda: self.youtube.speed_up(),
+            "yt_slow_down":     lambda: self.youtube.slow_down(),
+            "yt_normal_speed":  lambda: self.youtube.normal_speed(),
+            "yt_speed": lambda speed="normal": (
+                self.youtube.speed_up() if speed == "fast" else
+                self.youtube.slow_down() if speed == "slow" else
+                self.youtube.normal_speed()
             ),
+
+            # YouTube — Navigation
+            "yt_home":          lambda: self.youtube.open_youtube(),
+            "yt_trending":      lambda: self.youtube.open_trending(),
+            "yt_subscriptions": lambda: self.youtube.open_subscriptions(),
+            "yt_history":       lambda: self.youtube.open_history(),
+            "yt_liked":         lambda: self.youtube.open_liked_videos(),
+            "yt_watch_later":   lambda: self.youtube.open_watch_later(),
+            "yt_shorts":        lambda: self.youtube.open_shorts(),
+            "yt_music":         lambda: self.youtube.open_music(),
+            "yt_search":        lambda query="": self.youtube.search(query),
+            "yt_timestamp":     lambda position=5: self.youtube.go_to_timestamp(int(position)),
 
             # Windows settings
             "open_settings": lambda page="": self.windows_nav.open_settings(page),
