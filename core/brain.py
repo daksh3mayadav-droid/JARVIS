@@ -448,8 +448,8 @@ class Brain:
         try:
             from voice.voice_corrector import correct_voice_input
             user_input = correct_voice_input(user_input)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            log.debug("Voice correction skipped: %s", exc)
 
         log.info("Processing: %s", user_input[:100])
 

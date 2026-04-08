@@ -50,7 +50,6 @@ VOICE_CORRECTIONS: dict[str, str] = {
     "though the":           "the",
 
     # Common verbs
-    "open google":          "open google",  # already correct, keep explicit
 }
 
 # ─── Phonetic keyword map ─────────────────────────────────────────────────────
