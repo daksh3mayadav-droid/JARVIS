@@ -92,7 +92,7 @@ class Brain:
     - Local keyword-based intent classification (works without LLM)
     - LLM connection via Ollama API (for complex/ambiguous requests)
     - Intent classification and dispatch
-    - Conversation history (last 20 messages)
+    - Conversation history (last 8 messages)
     - Async task queue for long operations
     - Safety checks before execution
     """
@@ -128,7 +128,7 @@ class Brain:
         self.safety = safety or SafetyClassifier()
         self.personality = personality or TARSPersonality()
 
-        self._context: list[dict] = []  # Last 20 messages
+        self._context: list[dict] = []  # Last 8 messages
         self._task_queue: queue.Queue = queue.Queue()
         self._action_registry: dict[str, Callable] = {}
         self._running = False
@@ -392,6 +392,9 @@ class Brain:
         """
         Send a prompt to Ollama and return the raw text response.
 
+        Uses streaming to accumulate tokens incrementally, reducing
+        perceived latency.
+
         Args:
             prompt: The user prompt.
 
@@ -399,12 +402,12 @@ class Brain:
             LLM response text or None on failure.
         """
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        messages.extend(self._context[-20:])
+        messages.extend(self._context[-8:])
 
         payload = {
             "model": self.model,
             "messages": messages,
-            "stream": False,
+            "stream": True,
             "options": {
                 "temperature": self.temperature,
                 "num_predict": self.max_tokens,
@@ -416,11 +419,24 @@ class Brain:
                 resp = requests.post(
                     f"{self.api_url}/api/chat",
                     json=payload,
+                    stream=True,
                     timeout=self.timeout,
                 )
                 resp.raise_for_status()
-                data = resp.json()
-                content = data.get("message", {}).get("content", "")
+                content_parts: list[str] = []
+                for line in resp.iter_lines():
+                    if not line:
+                        continue
+                    try:
+                        chunk = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    token = chunk.get("message", {}).get("content", "")
+                    if token:
+                        content_parts.append(token)
+                    if chunk.get("done"):
+                        break
+                content = "".join(content_parts)
                 log.debug("LLM response received (%d chars)", len(content))
                 return content
             except requests.exceptions.ConnectionError:
@@ -537,10 +553,10 @@ class Brain:
     # ─── Context Management ───────────────────────────────────────────────
 
     def _add_context(self, role: str, content: str) -> None:
-        """Add a message to the rolling context window (max 20)."""
+        """Add a message to the rolling context window (max 8)."""
         self._context.append({"role": role, "content": content})
-        if len(self._context) > 20:
-            self._context = self._context[-20:]
+        if len(self._context) > 8:
+            self._context = self._context[-8:]
 
     def clear_context(self) -> None:
         """Clear the in-memory conversation context."""

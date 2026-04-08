@@ -5,11 +5,11 @@ jarvis:
   version: "1.0.0"
 
 llm:
-  model: "mistral"
+  model: "gemma2:2b"
   api_url: "http://localhost:11434"
   temperature: 0.7
   max_tokens: 256
-  timeout: 60
+  timeout: 30
   retry_attempts: 3
 
 voice:
@@ -25,7 +25,7 @@ voice:
 vision:
   enabled: true
   capture_fps: 1
-  ocr_engine: "easyocr"
+  ocr_engine: "pytesseract"
   screenshot_dir: "data/screenshots"
   change_threshold: 30
 

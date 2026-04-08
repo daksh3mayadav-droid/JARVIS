@@ -45,6 +45,8 @@ class Memory:
         self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
+        self._pending_writes = 0
+        self._batch_size = 5
         self._init_schema()
         log.info("Memory initialized at %s", self.db_path)
 
@@ -128,7 +130,10 @@ class Memory:
             "INSERT INTO conversations (role, content, timestamp, session_id) VALUES (?,?,?,?)",
             (role, content, time.time(), session_id),
         )
-        self._conn.commit()
+        self._pending_writes += 1
+        if self._pending_writes >= self._batch_size:
+            self._conn.commit()
+            self._pending_writes = 0
 
     def get_recent_messages(
         self,
@@ -258,7 +263,10 @@ class Memory:
                 "INSERT INTO learned_patterns (trigger, response, last_seen) VALUES (?,?,?)",
                 (trigger, response, time.time()),
             )
-        self._conn.commit()
+        self._pending_writes += 1
+        if self._pending_writes >= self._batch_size:
+            self._conn.commit()
+            self._pending_writes = 0
 
     def find_pattern(self, trigger: str) -> Optional[str]:
         """
@@ -416,6 +424,12 @@ class Memory:
 
     # ─── Cleanup ──────────────────────────────────────────────────────────
 
+    def flush(self) -> None:
+        """Commit any pending batched writes immediately."""
+        if self._pending_writes > 0:
+            self._conn.commit()
+            self._pending_writes = 0
+
     def vacuum(self) -> None:
         """Run SQLite VACUUM to reclaim disk space."""
         self._conn.execute("VACUUM")
@@ -424,6 +438,7 @@ class Memory:
 
     def close(self) -> None:
         """Close the database connection."""
+        self.flush()
         self._conn.close()
 
     def __del__(self) -> None:

@@ -45,8 +45,13 @@ class WakeWordDetector:
     Visual/audio indicator fired on activation.
     """
 
-    def __init__(self) -> None:
-        """Initialize the wake word detector."""
+    def __init__(self, model=None) -> None:
+        """Initialize the wake word detector.
+
+        Args:
+            model: Optional pre-loaded Vosk Model instance. If provided,
+                   it will be used directly instead of loading from disk.
+        """
         config = get_config()
         voice_cfg = config.get("voice", {})
 
@@ -58,13 +63,17 @@ class WakeWordDetector:
         )
         self._activation_beep: bool = voice_cfg.get("activation_beep", True)
 
-        self._model: Optional[Model] = None
         self._active = False
         self._thread: Optional[threading.Thread] = None
         self._callbacks: list[Callable] = []
         self._cooldown = 2.0   # Seconds between activations
 
-        self._load_model()
+        if model is not None:
+            self._model = model
+            log.debug("Wake word detector using shared Vosk model.")
+        else:
+            self._model = None
+            self._load_model()
         log.info("WakeWordDetector init. Wake word: '%s'", self._wake_word)
 
     # ─── Model ────────────────────────────────────────────────────────────

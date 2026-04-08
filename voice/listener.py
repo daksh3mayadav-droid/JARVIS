@@ -49,8 +49,13 @@ class Listener:
     a stop signal.
     """
 
-    def __init__(self) -> None:
-        """Initialize the Vosk listener."""
+    def __init__(self, model=None) -> None:
+        """Initialize the Vosk listener.
+
+        Args:
+            model: Optional pre-loaded Vosk Model instance. If provided,
+                   it will be used directly instead of loading from disk.
+        """
         config = get_config()
         voice_cfg = config.get("voice", {})
 
@@ -59,7 +64,6 @@ class Listener:
         )
         self._silence_timeout: float = voice_cfg.get("silence_timeout", 1.5)
 
-        self._model: Optional[Model] = None
         self._listening = False
         self._status_callback: Optional[Callable[[str], None]] = None
 
@@ -68,7 +72,12 @@ class Listener:
         if not VOSK_AVAILABLE:
             log.warning("vosk not available. Voice input disabled.")
 
-        self._load_model()
+        if model is not None:
+            self._model = model
+            log.debug("Listener using shared Vosk model.")
+        else:
+            self._model = None
+            self._load_model()
 
     # ─── Model ────────────────────────────────────────────────────────────
 
