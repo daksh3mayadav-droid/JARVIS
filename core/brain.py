@@ -116,11 +116,25 @@ class Brain:
         config = get_config()
         llm_cfg = config.get("llm", {})
 
-        self.model = llm_cfg.get("model", "mistral")
+        self.provider = llm_cfg.get("provider", "ollama")
+
+        # Groq settings
+        self.groq_api_key = llm_cfg.get("groq_api_key", "")
+        self.groq_model = llm_cfg.get("groq_model", "llama-3.1-8b-instant")
+        self.groq_api_url = llm_cfg.get("groq_api_url", "https://api.groq.com/openai/v1")
+
+        # Gemini settings
+        self.gemini_api_key = llm_cfg.get("gemini_api_key", "")
+        self.gemini_model = llm_cfg.get("gemini_model", "gemini-2.0-flash")
+        self.gemini_api_url = llm_cfg.get("gemini_api_url", "https://generativelanguage.googleapis.com/v1beta")
+
+        # Ollama settings (keep existing)
+        self.model = llm_cfg.get("model", "gemma2:2b")
         self.api_url = llm_cfg.get("api_url", "http://localhost:11434")
+
         self.temperature = llm_cfg.get("temperature", 0.7)
         self.max_tokens = llm_cfg.get("max_tokens", 256)
-        self.timeout = llm_cfg.get("timeout", 60)
+        self.timeout = llm_cfg.get("timeout", 30)
         self.retry_attempts = llm_cfg.get("retry_attempts", 3)
 
         self.memory = memory or Memory()
@@ -134,7 +148,7 @@ class Brain:
         self._running = False
         self._worker_thread: Optional[threading.Thread] = None
 
-        log.info("Brain initialized. Model: %s @ %s", self.model, self.api_url)
+        log.info("Brain initialized. Provider: %s | Model: %s", self.provider, self._active_model_name())
 
     # ─── Action Registry ──────────────────────────────────────────────────
 
@@ -388,7 +402,135 @@ class Brain:
 
     # ─── LLM Interface ────────────────────────────────────────────────────
 
+    def _active_model_name(self) -> str:
+        """Return the model name for the currently configured provider."""
+        if self.provider == "groq":
+            return self.groq_model
+        elif self.provider == "gemini":
+            return self.gemini_model
+        return self.model  # ollama
+
     def _query_llm(self, prompt: str) -> Optional[str]:
+        """Dispatch a prompt to the configured LLM provider."""
+        if self.provider == "groq":
+            return self._query_groq(prompt)
+        elif self.provider == "gemini":
+            return self._query_gemini(prompt)
+        else:
+            return self._query_ollama(prompt)
+
+    def _query_groq(self, prompt: str) -> Optional[str]:
+        """
+        Send a prompt to the Groq cloud API and return the response text.
+
+        Falls back to Ollama if no API key is configured.
+
+        Args:
+            prompt: The user prompt.
+
+        Returns:
+            LLM response text or None on failure.
+        """
+        if not self.groq_api_key:
+            log.error("Groq API key not set. Falling back to Ollama.")
+            return self._query_ollama(prompt)
+
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages.extend(self._context[-8:])
+
+        payload = {
+            "model": self.groq_model,
+            "messages": messages,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.groq_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        for attempt in range(1, self.retry_attempts + 1):
+            try:
+                resp = requests.post(
+                    f"{self.groq_api_url}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=self.timeout,
+                )
+                resp.raise_for_status()
+                content = resp.json()["choices"][0]["message"]["content"]
+                log.debug("Groq response received (%d chars)", len(content))
+                return content
+            except requests.exceptions.ConnectionError:
+                log.error("Cannot connect to Groq API at %s", self.groq_api_url)
+                return None
+            except requests.exceptions.Timeout:
+                log.warning("Groq timeout (attempt %d/%d)", attempt, self.retry_attempts)
+                if attempt == self.retry_attempts:
+                    return None
+                time.sleep(2)
+            except Exception as exc:  # noqa: BLE001
+                log.error("Groq query failed: %s", exc)
+                return None
+
+        return None
+
+    def _query_gemini(self, prompt: str) -> Optional[str]:
+        """
+        Send a prompt to the Google Gemini API and return the response text.
+
+        Falls back to Ollama if no API key is configured.
+
+        Args:
+            prompt: The user prompt.
+
+        Returns:
+            LLM response text or None on failure.
+        """
+        if not self.gemini_api_key:
+            log.error("Gemini API key not set. Falling back to Ollama.")
+            return self._query_ollama(prompt)
+
+        contents = []
+        for msg in self._context[-8:]:
+            role = "model" if msg["role"] == "assistant" else msg["role"]
+            contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+
+        payload = {
+            "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+            "contents": contents,
+            "generationConfig": {
+                "temperature": self.temperature,
+                "maxOutputTokens": self.max_tokens,
+            },
+        }
+        url = (
+            f"{self.gemini_api_url}/models/{self.gemini_model}"
+            f":generateContent?key={self.gemini_api_key}"
+        )
+
+        for attempt in range(1, self.retry_attempts + 1):
+            try:
+                resp = requests.post(url, json=payload, timeout=self.timeout)
+                resp.raise_for_status()
+                content = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+                log.debug("Gemini response received (%d chars)", len(content))
+                return content
+            except requests.exceptions.ConnectionError:
+                log.error("Cannot connect to Gemini API at %s", self.gemini_api_url)
+                return None
+            except requests.exceptions.Timeout:
+                log.warning("Gemini timeout (attempt %d/%d)", attempt, self.retry_attempts)
+                if attempt == self.retry_attempts:
+                    return None
+                time.sleep(2)
+            except Exception as exc:  # noqa: BLE001
+                log.error("Gemini query failed: %s", exc)
+                return None
+
+        return None
+
+    def _query_ollama(self, prompt: str) -> Optional[str]:
         """
         Send a prompt to Ollama and return the raw text response.
 
@@ -568,6 +710,32 @@ class Brain:
         return list(self._context)
 
     # ─── Status ───────────────────────────────────────────────────────────
+
+    def is_llm_available(self) -> bool:
+        """
+        Check if the configured LLM provider is reachable.
+
+        Returns:
+            True if the provider API responds, False otherwise.
+        """
+        try:
+            if self.provider == "groq":
+                resp = requests.get(
+                    f"{self.groq_api_url}/models",
+                    headers={"Authorization": f"Bearer {self.groq_api_key}"},
+                    timeout=5,
+                )
+                return resp.status_code == 200
+            elif self.provider == "gemini":
+                resp = requests.get(
+                    f"{self.gemini_api_url}/models?key={self.gemini_api_key}",
+                    timeout=5,
+                )
+                return resp.status_code == 200
+            else:
+                return self.is_ollama_running()
+        except Exception:  # noqa: BLE001
+            return False
 
     def is_ollama_running(self) -> bool:
         """
