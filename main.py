@@ -201,10 +201,10 @@ class JARVIS:
             # System info
             "get_system_info": lambda: self._say_and_return(self.hardware.summary()),
             "get_cpu": lambda: self._say_and_return(
-                f"CPU: {self.process_manager.get_cpu()['usage_pct']}%"
+                f"CPU: {self.process_manager.get_cpu().get('percent', 0.0):.1f}%"
             ),
             "get_ram": lambda: self._say_and_return(
-                f"RAM: {self.process_manager.get_ram()['used_human']} used"
+                f"RAM: {self.process_manager.get_ram().get('used_human', '?')} used"
             ),
             "get_gpu": lambda: self._say_and_return(
                 str(self.process_manager.get_gpu())
@@ -395,7 +395,7 @@ class JARVIS:
         bat_pct = battery["percent"] if battery else 0
 
         self.ui.show_dashboard({
-            "cpu_pct": cpu["usage_pct"],
+            "cpu_pct": cpu.get("percent", 0),
             "ram_pct": ram["percent"],
             "gpu_pct": gpu_pct,
             "battery_pct": bat_pct,

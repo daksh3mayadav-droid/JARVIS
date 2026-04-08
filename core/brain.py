@@ -103,6 +103,24 @@ PARAM_ALIASES: dict[str, str] = {
     "playback_speed":    "speed",
 }
 
+# ─── Intent → Default Action Fallback ────────────────────────────────────────
+# When the LLM returns an intent name (e.g. "app_launch") as the action value
+# instead of a real registered action, map it to a sensible default action.
+
+INTENT_TO_DEFAULT_ACTION: dict[str, str | None] = {
+    "app_launch":     "open_app",
+    "information":    "get_system_info",
+    "youtube":        "yt_home",
+    "search":         "google_search",
+    "settings":       "open_settings",
+    "vision":         "take_screenshot",
+    "file_ops":       "list_dir",
+    "system_control": None,  # too generic — no single default action
+    "automation":     None,  # too generic — no single default action
+    "conversation":   None,  # no system action needed
+    "unknown":        None,
+}
+
 # ─── Intent Categories ────────────────────────────────────────────────────────
 
 INTENTS = (
@@ -819,8 +837,9 @@ class Brain:
 
         Resolution order:
         1. ACTION_ALIASES static table
-        2. "open X" / "launch X" → open_app(app_name=X)
-        3. Fuzzy match against registered action names
+        2. Intent name → default action (INTENT_TO_DEFAULT_ACTION)
+        3. "open X" / "launch X" → open_app(app_name=X)
+        4. Fuzzy match against registered action names
 
         Args:
             action: The action name returned by the LLM.
@@ -837,14 +856,20 @@ class Brain:
                 log.info("Action alias: '%s' → '%s'", action, mapped_action)
                 return mapped_action, mapped_params
 
-        # 2. "open X" or "launch X" pattern → open_app
+        # 2. Intent name used as action name (e.g. LLM returns "app_launch")
+        intent_default = INTENT_TO_DEFAULT_ACTION.get(normalized, "")
+        if intent_default and intent_default in self._action_registry:
+            log.info("Intent-to-action: '%s' → '%s'", action, intent_default)
+            return intent_default, {}
+
+        # 3. "open X" or "launch X" pattern → open_app
         for prefix in ("open_", "launch_", "start_", "run_"):
             if normalized.startswith(prefix):
                 app_name = normalized[len(prefix):].replace("_", " ")
                 log.info("Action auto-convert: '%s' → open_app(app_name='%s')", action, app_name)
                 return "open_app", {"app_name": app_name}
 
-        # 3. Fuzzy match against registered actions
+        # 4. Fuzzy match against registered actions
         try:
             from thefuzz import fuzz as _fuzz
             best_score = 0
