@@ -432,7 +432,7 @@ class Brain:
             LLM response text or None on failure.
         """
         if not self.groq_api_key:
-            log.error("Groq API key not set. Falling back to Ollama.")
+            log.warning("Groq API key not configured. Attempting Ollama fallback.")
             return self._query_ollama(prompt)
 
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -488,7 +488,7 @@ class Brain:
             LLM response text or None on failure.
         """
         if not self.gemini_api_key:
-            log.error("Gemini API key not set. Falling back to Ollama.")
+            log.warning("Gemini API key not configured. Attempting Ollama fallback.")
             return self._query_ollama(prompt)
 
         contents = []
