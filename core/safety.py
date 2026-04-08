@@ -47,6 +47,16 @@ _SAFE_KEYWORDS = (
     "read", "view", "screenshot", "info", "status", "help",
     "volume", "brightness", "scroll", "click", "type",
     "switch window", "minimize", "maximize",
+    # YouTube actions (all yt_* are read-only keyboard shortcuts)
+    "yt_", "play_youtube", "youtube_search",
+    # System information queries (read-only)
+    "get_cpu", "get_ram", "get_gpu", "get_battery", "get_system_info",
+    # Browser / navigation
+    "google_search", "open_url",
+    # Settings toggles (non-destructive)
+    "toggle_wifi", "toggle_bluetooth", "set_volume", "set_brightness",
+    # App control
+    "open_app",
 )
 
 
