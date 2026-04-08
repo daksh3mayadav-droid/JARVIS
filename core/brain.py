@@ -27,6 +27,26 @@ from utils.tars_personality import TARSPersonality
 
 log = get_logger("brain")
 
+# ─── Action Alias Remapping ───────────────────────────────────────────────────
+# Maps LLM-returned action names that are NOT in the registry to the correct
+# registered action name (and optional parameter overrides).
+
+ACTION_ALIASES: dict[str, tuple[str, dict]] = {
+    "open google-chrome":   ("open_app",        {"app_name": "google chrome"}),
+    "open_chrome":          ("open_app",        {"app_name": "chrome"}),
+    "open_browser":         ("open_app",        {"app_name": "chrome"}),
+    "launch_app":           ("open_app",        {}),
+    "run_app":              ("open_app",        {}),
+    "kill_process":         ("close_app",       {}),
+    "search_google":        ("google_search",   {}),
+    "web_search":           ("google_search",   {}),
+    "search_youtube":       ("play_youtube",    {}),
+    "open_youtube":         ("yt_home",         {}),
+    "play_video":           ("play_youtube",    {}),
+    "play_song":            ("play_youtube",    {}),
+    "play_music":           ("play_youtube",    {}),
+}
+
 # ─── Intent Categories ────────────────────────────────────────────────────────
 
 INTENTS = (
@@ -61,6 +81,16 @@ AVAILABLE CAPABILITIES:
 - vision: screenshot, OCR, screen analysis
 - search: search files, web (via browser)
 - conversation: general chat and questions
+- youtube: full YouTube control (playback, volume, navigation)
+
+YOUTUBE ACTIONS (use intent "youtube"):
+  Playback:   yt_play_pause, yt_play, yt_pause, yt_skip_forward, yt_skip_backward,
+              yt_next_video, yt_previous_video, yt_restart
+  Volume:     yt_volume_up, yt_volume_down, yt_mute
+  Display:    yt_fullscreen, yt_exit_fullscreen, yt_theater, yt_miniplayer
+  Captions:   yt_captions, yt_speed_up, yt_slow_down, yt_normal_speed
+  Navigation: play_youtube (search), yt_home, yt_trending, yt_subscriptions,
+              yt_history, yt_liked, yt_watch_later, yt_shorts, yt_music
 
 CRITICAL RULES:
 1. NEVER write more than 3 sentences in your response field.
@@ -193,6 +223,12 @@ class Brain:
         if "bluetooth" in text:
             return {"intent": "settings", "action": "toggle_bluetooth", "parameters": {}}
 
+        # --- YouTube exact-phrase shortcuts (must come before generic app launch) ---
+        _yt_open_phrases = ("open youtube", "go to youtube", "youtube home")
+        for phrase in _yt_open_phrases:
+            if text == phrase or text.startswith(phrase):
+                return {"intent": "youtube", "action": "yt_home", "parameters": {}}
+
         # --- App launch ---
         for trigger in ("open ", "launch ", "start ", "run "):
             if text.startswith(trigger):
@@ -204,6 +240,90 @@ class Brain:
                         "action": "open_app",
                         "parameters": {"app_name": app_name},
                     }
+
+        # --- YouTube control commands (checked BEFORE generic play/youtube) ---
+        _yt_controls: dict[str, str] = {
+            # Playback
+            "pause video":          "yt_pause",
+            "pause the video":      "yt_pause",
+            "pause":                "yt_pause",
+            "resume video":         "yt_play",
+            "resume the video":     "yt_play",
+            "resume":               "yt_play",
+            "play video":           "yt_play",
+            "unpause":              "yt_play",
+            "next video":           "yt_next_video",
+            "skip video":           "yt_next_video",
+            "skip":                 "yt_next_video",
+            "next":                 "yt_next_video",
+            "previous video":       "yt_previous_video",
+            "go back":              "yt_previous_video",
+            "restart video":        "yt_restart",
+            "restart":              "yt_restart",
+            "skip forward":         "yt_skip_forward",
+            "fast forward":         "yt_skip_forward",
+            "skip backward":        "yt_skip_backward",
+            "rewind":               "yt_skip_backward",
+            # Volume
+            "volume up":            "yt_volume_up",
+            "louder":               "yt_volume_up",
+            "turn up":              "yt_volume_up",
+            "volume down":          "yt_volume_down",
+            "quieter":              "yt_volume_down",
+            "turn down":            "yt_volume_down",
+            "mute":                 "yt_mute",
+            "unmute":               "yt_mute",
+            # Display
+            "fullscreen":           "yt_fullscreen",
+            "full screen":          "yt_fullscreen",
+            "make it full screen":  "yt_fullscreen",
+            "exit fullscreen":      "yt_exit_fullscreen",
+            "theater mode":         "yt_theater",
+            "theatre mode":         "yt_theater",
+            "mini player":          "yt_miniplayer",
+            "miniplayer":           "yt_miniplayer",
+            "picture in picture":   "yt_miniplayer",
+            # Captions & Speed
+            "captions":             "yt_captions",
+            "subtitles":            "yt_captions",
+            "turn on captions":     "yt_captions",
+            "turn off captions":    "yt_captions",
+            "speed up":             "yt_speed_up",
+            "faster":               "yt_speed_up",
+            "increase speed":       "yt_speed_up",
+            "slow down":            "yt_slow_down",
+            "slower":               "yt_slow_down",
+            "decrease speed":       "yt_slow_down",
+            "normal speed":         "yt_normal_speed",
+            "reset speed":          "yt_normal_speed",
+            # Navigation
+            "open youtube":         "yt_home",
+            "go to youtube":        "yt_home",
+            "youtube home":         "yt_home",
+            "youtube trending":     "yt_trending",
+            "trending":             "yt_trending",
+            "my subscriptions":     "yt_subscriptions",
+            "subscriptions":        "yt_subscriptions",
+            "watch history":        "yt_history",
+            "youtube history":      "yt_history",
+            "my history":           "yt_history",
+            "liked videos":         "yt_liked",
+            "my liked videos":      "yt_liked",
+            "watch later":          "yt_watch_later",
+            "my watch later":       "yt_watch_later",
+            "youtube shorts":       "yt_shorts",
+            "open shorts":          "yt_shorts",
+            "youtube music":        "yt_music",
+            "open youtube music":   "yt_music",
+        }
+        # Longest phrase first so "pause the video" beats "pause"
+        for phrase, yt_action in sorted(_yt_controls.items(), key=lambda x: -len(x[0])):
+            if phrase in text:
+                return {
+                    "intent": "youtube",
+                    "action": yt_action,
+                    "parameters": {},
+                }
 
         # --- YouTube / music ---
         if "youtube" in text or text.startswith("play "):
@@ -324,6 +444,13 @@ class Brain:
         if not user_input.strip():
             return self.personality.respond("Say something.")
 
+        # Apply voice correction to clean up Vosk mishearings
+        try:
+            from voice.voice_corrector import correct_voice_input
+            user_input = correct_voice_input(user_input)
+        except Exception:  # noqa: BLE001
+            pass
+
         log.info("Processing: %s", user_input[:100])
 
         # Step 1: Try local keyword classification FIRST (no LLM required)
@@ -392,7 +519,15 @@ class Brain:
             if exec_result is not None and isinstance(exec_result, str):
                 response_styled = exec_result
         elif action:
-            log.warning("Unknown action '%s' — no handler registered.", action)
+            # Try to normalize the action name before giving up
+            normalized_action, extra_params = self._normalize_action(action)
+            if normalized_action and normalized_action in self._action_registry:
+                merged_params = {**extra_params, **parameters}
+                exec_result = self._execute_action(normalized_action, merged_params)
+                if exec_result is not None and isinstance(exec_result, str):
+                    response_styled = exec_result
+            else:
+                log.warning("Unknown action '%s' — no handler registered.", action)
 
         self._add_context("assistant", response_styled)
         self.memory.add_message("assistant", response_styled)
@@ -619,6 +754,60 @@ class Brain:
         if parsed and isinstance(parsed, dict):
             return parsed.get("steps", [])
         return []
+
+    # ─── Action Normalization ─────────────────────────────────────────────
+
+    def _normalize_action(self, action: str) -> tuple[str, dict]:
+        """
+        Map an unregistered LLM action name to the closest registered action.
+
+        Resolution order:
+        1. ACTION_ALIASES static table
+        2. "open X" / "launch X" → open_app(app_name=X)
+        3. Fuzzy match against registered action names
+
+        Args:
+            action: The action name returned by the LLM.
+
+        Returns:
+            (resolved_action, extra_params) tuple.  Returns ("", {}) if
+            no mapping could be found.
+        """
+        normalized = action.lower().strip().replace(" ", "_")
+
+        # 1. Static alias table (check both original and normalised form)
+        for key, (mapped_action, mapped_params) in ACTION_ALIASES.items():
+            if action == key or normalized == key.replace(" ", "_"):
+                log.info("Action alias: '%s' → '%s'", action, mapped_action)
+                return mapped_action, mapped_params
+
+        # 2. "open X" or "launch X" pattern → open_app
+        for prefix in ("open_", "launch_", "start_", "run_"):
+            if normalized.startswith(prefix):
+                app_name = normalized[len(prefix):].replace("_", " ")
+                log.info("Action auto-convert: '%s' → open_app(app_name='%s')", action, app_name)
+                return "open_app", {"app_name": app_name}
+
+        # 3. Fuzzy match against registered actions
+        try:
+            from thefuzz import fuzz as _fuzz
+            best_score = 0
+            best_action = ""
+            for registered in self._action_registry:
+                score = _fuzz.ratio(normalized, registered)
+                if score > best_score:
+                    best_score = score
+                    best_action = registered
+            if best_score >= 80:
+                log.info(
+                    "Fuzzy action match: '%s' → '%s' (score=%d)",
+                    action, best_action, best_score,
+                )
+                return best_action, {}
+        except ImportError:
+            pass
+
+        return "", {}
 
     # ─── Action Execution ─────────────────────────────────────────────────
 
