@@ -47,6 +47,62 @@ ACTION_ALIASES: dict[str, tuple[str, dict]] = {
     "play_music":           ("play_youtube",    {}),
 }
 
+# ─── Parameter Name Normalisation ────────────────────────────────────────────
+# LLMs invent creative parameter names.  Map every common variation to the
+# canonical name that the registered lambda functions actually expect.
+
+PARAM_ALIASES: dict[str, str] = {
+    # search / query variants
+    "search_query":      "query",
+    "searchQuery":       "query",
+    "search_term":       "query",
+    "q":                 "query",
+    "video_query":       "query",
+    "song":              "query",
+    "song_name":         "query",
+    "music":             "query",
+    # app_name variants
+    "app":               "app_name",
+    "application":       "app_name",
+    "application_name":  "app_name",
+    # path variants
+    "filepath":          "path",
+    "file_path":         "path",
+    "directory":         "path",
+    "dir":               "path",
+    # url variants
+    "webpage":           "url",
+    "website":           "url",
+    "link":              "url",
+    "address":           "url",
+    # level variants (volume / brightness)
+    "vol":               "level",
+    "volume_level":      "level",
+    "brightness_level":  "level",
+    "percentage":        "level",
+    # content / text variants
+    "content_text":      "content",
+    "text_content":      "content",
+    "message":           "text",
+    "input_text":        "text",
+    # key / hotkey variants
+    "key_name":          "key",
+    "keyname":           "key",
+    "hotkeys":           "keys",
+    "key_combination":   "keys",
+    # file extension variants
+    "file_extension":    "ext",
+    "extension":         "ext",
+    # topic variants
+    "topic_name":        "topic",
+    "subject":           "topic",
+    # time / position variants
+    "time_seconds":      "seconds",
+    "skip_seconds":      "seconds",
+    "position_pct":      "position",
+    "playback_speed":    "speed",
+}
+
 # ─── Intent Categories ────────────────────────────────────────────────────────
 
 INTENTS = (
@@ -809,6 +865,19 @@ class Brain:
 
         return "", {}
 
+    # ─── Parameter Normalization ───────────────────────────────────────────
+
+    def _normalize_parameters(self, parameters: dict) -> dict:
+        """
+        Remap LLM-invented parameter names to the canonical names that
+        registered handler lambdas actually expect.
+
+        For example, the LLM might send ``{"search_query": "cats"}`` but
+        the lambda is ``lambda query="": …``, so ``search_query`` must be
+        mapped to ``query`` before the call is made.
+        """
+        return {PARAM_ALIASES.get(k, k): v for k, v in parameters.items()}
+
     # ─── Action Execution ─────────────────────────────────────────────────
 
     def _execute_action(
@@ -834,11 +903,35 @@ class Brain:
             if not confirmed:
                 return self.personality.respond("Action cancelled by user.")
 
+        # Normalise LLM-invented parameter names to canonical handler names.
+        parameters = self._normalize_parameters(parameters)
+
+        handler = self._action_registry[action]
         try:
-            handler = self._action_registry[action]
             result = handler(**parameters)
             log.info("Action executed: %s", action)
             return str(result) if result is not None else None
+        except TypeError as te:
+            # Parameter mismatch even after normalisation — try fallbacks.
+            log.warning(
+                "Parameter mismatch for '%s': %s. Retrying with positional arg.",
+                action, te,
+            )
+            try:
+                if parameters:
+                    first_key, first_value = next(iter(parameters.items()))
+                    log.warning(
+                        "Fallback: calling '%s' with first param '%s' positionally.",
+                        action, first_key,
+                    )
+                    result = handler(first_value)
+                else:
+                    result = handler()
+                log.info("Action executed (fallback): %s", action)
+                return str(result) if result is not None else None
+            except Exception as exc2:  # noqa: BLE001
+                log.error("Action '%s' failed (fallback): %s", action, exc2)
+                return self.personality.error(str(exc2))
         except Exception as exc:  # noqa: BLE001
             log.error("Action '%s' failed: %s", action, exc)
             return self.personality.error(str(exc))
