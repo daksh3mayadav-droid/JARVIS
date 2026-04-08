@@ -194,7 +194,8 @@ jarvis:
   humor_level: 75          # 0 = serious, 100 = maximum TARS
 
 llm:
-  model: "phi"             # or "mistral:instruct" for better quality
+  provider: "groq"         # Options: "groq", "gemini", "ollama"
+  groq_api_key: ""         # Get from https://console.groq.com
   temperature: 0.7
 
 voice:
@@ -205,6 +206,46 @@ voice:
 system:
   safe_mode: true          # false = no confirmation for risky actions
 ```
+
+---
+
+## 🤖 LLM Provider Setup
+
+JARVIS supports three LLM providers. Edit `config.yaml` to choose:
+
+### Groq (Recommended — Free & Fastest)
+1. Get a free API key at https://console.groq.com
+2. Set in `config.yaml`:
+   ```yaml
+   llm:
+     provider: "groq"
+     groq_api_key: "gsk_your_key_here"
+   ```
+
+### Google Gemini (Free Tier Available)
+1. Get an API key at https://aistudio.google.com/apikey
+2. Set in `config.yaml`:
+   ```yaml
+   llm:
+     provider: "gemini"
+     gemini_api_key: "your_key_here"
+   ```
+
+### Ollama (Local, Offline)
+1. Install Ollama: https://ollama.com
+2. Pull a model: `ollama pull gemma2:2b`
+3. Set in `config.yaml`:
+   ```yaml
+   llm:
+     provider: "ollama"
+     model: "gemma2:2b"
+   ```
+
+| Provider | Response Time | Cost | Requires Internet |
+|----------|--------------|------|-------------------|
+| **Groq** | ~200ms | Free tier | Yes |
+| **Google Gemini** | ~300ms | Free tier | Yes |
+| Ollama (local) | 3–15 seconds | Free | No |
 
 ---
 

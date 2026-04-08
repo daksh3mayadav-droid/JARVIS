@@ -5,11 +5,25 @@ jarvis:
   version: "1.0.0"
 
 llm:
-  model: "gemma2:2b"
+  provider: "groq"                          # Options: "groq", "gemini", "ollama"
+
+  # Groq (free, blazingly fast — recommended)
+  groq_api_key: ""                          # Get from https://console.groq.com
+  groq_model: "llama-3.1-8b-instant"        # Fast and capable
+  groq_api_url: "https://api.groq.com/openai/v1"
+
+  # Google Gemini (free tier available)
+  gemini_api_key: ""                        # Get from https://aistudio.google.com/apikey
+  gemini_model: "gemini-2.0-flash"
+  gemini_api_url: "https://generativelanguage.googleapis.com/v1beta"
+
+  # Ollama (local, offline fallback)
+  model: "gemma2:2b"                        # Smaller model for local use
   api_url: "http://localhost:11434"
+
   temperature: 0.7
   max_tokens: 256
-  timeout: 30
+  timeout: 30                               # Cloud APIs are much faster
   retry_attempts: 3
 
 voice:
