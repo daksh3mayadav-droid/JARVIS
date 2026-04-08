@@ -7,6 +7,7 @@ displays boot dashboard, and enters the main interaction loop.
 
 from __future__ import annotations
 
+import os
 import signal
 import sys
 import threading
@@ -23,26 +24,20 @@ setup_logging(log_level)
 
 log = get_logger("main")
 
-# ─── Subsystems ───────────────────────────────────────────────────────────────
+# ─── Core subsystems (always needed at startup) ───────────────────────────────
 from core.brain import Brain
 from core.memory import Memory
 from core.planner import Planner
 from core.safety import SafetyClassifier
 from system.controller import SystemController
-from system.file_manager import FileManager
 from system.process_manager import ProcessManager
 from system.app_launcher import AppLauncher
 from system.windows_navigator import WindowsNavigator
-from system.hardware_info import HardwareInfo
-from vision.screen_capture import ScreenCapture
-from vision.screen_analyzer import ScreenAnalyzer
 from voice.speaker import Speaker
 from voice.listener import Listener
 from voice.wake_word import WakeWordDetector
 from interface.text_interface import TextInterface
 from interface.gui import GUIManager
-from automation.task_automator import TaskAutomator
-from automation.browser_control import BrowserControl
 from utils.tars_personality import TARSPersonality
 
 
@@ -54,6 +49,10 @@ class JARVIS:
 
     Connects all subsystems and runs the main interaction loop.
     Accepts voice (wake word → STT) and text input simultaneously.
+
+    Heavy subsystems (ScreenCapture, ScreenAnalyzer, BrowserControl,
+    TaskAutomator, FileManager, HardwareInfo) are lazy-loaded on first use
+    to keep startup fast.
     """
 
     def __init__(self) -> None:
@@ -84,21 +83,38 @@ class JARVIS:
 
         # ── System Control ─────────────────────────────────────────────────
         self.controller = SystemController()
-        self.file_manager = FileManager(memory=self.memory)
         self.process_manager = ProcessManager()
         self.app_launcher = AppLauncher()
         self.app_launcher._memory = self.memory
         self.windows_nav = WindowsNavigator()
-        self.hardware = HardwareInfo()
 
-        # ── Vision ─────────────────────────────────────────────────────────
-        self.screen_capture = ScreenCapture()
-        self.screen_analyzer = ScreenAnalyzer(capture=self.screen_capture)
+        # ── Lazy-loaded heavy subsystems (initialized to None) ─────────────
+        self._hardware = None
+        self._screen_capture = None
+        self._screen_analyzer = None
+        self._file_manager = None
+        self._automator = None
+        self._browser = None
 
         # ── Voice ──────────────────────────────────────────────────────────
+        # Load Vosk model once and share between Listener and WakeWordDetector
+        vosk_model = None
+        try:
+            from vosk import Model as VoskModel
+            from pathlib import Path
+            vosk_model_path = cfg.get("voice", {}).get(
+                "vosk_model_path", "models/vosk-model-small-en-us-0.15"
+            )
+            if Path(vosk_model_path).exists():
+                os.environ.setdefault("VOSK_LOG_LEVEL", "-1")
+                vosk_model = VoskModel(vosk_model_path)
+                log.info("Shared Vosk model loaded from %s", vosk_model_path)
+        except ImportError:
+            pass
+
         self.speaker = Speaker(personality=self.personality)
-        self.listener = Listener()
-        self.wake_word_detector = WakeWordDetector()
+        self.listener = Listener(model=vosk_model)
+        self.wake_word_detector = WakeWordDetector(model=vosk_model)
 
         # ── Interface ──────────────────────────────────────────────────────
         self.ui = TextInterface()
@@ -106,11 +122,6 @@ class JARVIS:
             on_quit=self.shutdown,
             on_command=self._handle_text_input,
         )
-
-        # ── Automation ─────────────────────────────────────────────────────
-        self.automator = TaskAutomator()
-        self.automator.set_controller(self.controller)
-        self.browser = BrowserControl()
 
         # ── Register action handlers in Brain ──────────────────────────────
         self._register_actions()
@@ -121,6 +132,57 @@ class JARVIS:
         self._voice_thread: Optional[threading.Thread] = None
 
         log.info("All subsystems initialized.")
+
+    # ─── Lazy-loaded Properties ───────────────────────────────────────────────
+
+    @property
+    def hardware(self):
+        """Lazy-load HardwareInfo on first access."""
+        if self._hardware is None:
+            from system.hardware_info import HardwareInfo
+            self._hardware = HardwareInfo()
+        return self._hardware
+
+    @property
+    def screen_capture(self):
+        """Lazy-load ScreenCapture on first access."""
+        if self._screen_capture is None:
+            from vision.screen_capture import ScreenCapture
+            self._screen_capture = ScreenCapture()
+        return self._screen_capture
+
+    @property
+    def screen_analyzer(self):
+        """Lazy-load ScreenAnalyzer (and ScreenCapture) on first access."""
+        if self._screen_analyzer is None:
+            from vision.screen_analyzer import ScreenAnalyzer
+            self._screen_analyzer = ScreenAnalyzer(capture=self.screen_capture)
+        return self._screen_analyzer
+
+    @property
+    def file_manager(self):
+        """Lazy-load FileManager on first access."""
+        if self._file_manager is None:
+            from system.file_manager import FileManager
+            self._file_manager = FileManager(memory=self.memory)
+        return self._file_manager
+
+    @property
+    def automator(self):
+        """Lazy-load TaskAutomator on first access."""
+        if self._automator is None:
+            from automation.task_automator import TaskAutomator
+            self._automator = TaskAutomator()
+            self._automator.set_controller(self.controller)
+        return self._automator
+
+    @property
+    def browser(self):
+        """Lazy-load BrowserControl on first access."""
+        if self._browser is None:
+            from automation.browser_control import BrowserControl
+            self._browser = BrowserControl()
+        return self._browser
 
     # ─── Action Registry ──────────────────────────────────────────────────────
 
@@ -359,7 +421,8 @@ class JARVIS:
 
         self.wake_word_detector.stop()
         self.brain.shutdown()
-        self.automator.shutdown()
+        if self._automator is not None:
+            self._automator.shutdown()
         self.speaker.shutdown()
         self.gui.shutdown()
         self.memory.close()
