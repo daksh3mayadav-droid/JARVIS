@@ -66,6 +66,9 @@ _SAFE_KEYWORDS = (
     # Browser tab control
     "new_tab", "close_tab", "next_tab", "prev_tab", "refresh_page",
     "go_back", "go_forward",
+    # Music streaming
+    "play_music", "music_pause", "music_resume", "music_stop",
+    "music_skip", "music_volume", "music_now_playing",
 )
 
 
