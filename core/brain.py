@@ -43,8 +43,8 @@ ACTION_ALIASES: dict[str, tuple[str, dict]] = {
     "search_youtube":       ("play_youtube",    {}),
     "open_youtube":         ("yt_home",         {}),
     "play_video":           ("play_youtube",    {}),
-    "play_song":            ("play_youtube",    {}),
-    "play_music":           ("play_youtube",    {}),
+    "play_song":            ("play_music",      {}),
+    "stream_music":         ("play_music",      {}),
     # Mouse aliases
     "mouse_click":          ("click",           {}),
     "mouse click":          ("click",           {}),
@@ -368,6 +368,20 @@ class Brain:
             if phrase in text:
                 return {"intent": "system_control", "action": tab_action, "parameters": {}}
 
+        # --- Music exact-phrase shortcuts (MUST come before YouTube controls) ---
+        # e.g. "pause music" must not be swallowed by YouTube's "pause" entry
+        _music_exact_early: dict[str, str] = {
+            "pause music":    "music_pause",
+            "resume music":   "music_resume",
+            "stop music":     "music_stop",
+            "music volume":   "music_volume",
+            "what's playing": "music_now_playing",
+            "now playing":    "music_now_playing",
+        }
+        for phrase, music_action in sorted(_music_exact_early.items(), key=lambda x: -len(x[0])):
+            if phrase in text:
+                return {"intent": "music_control", "action": music_action, "parameters": {}}
+
         # --- YouTube control commands (checked BEFORE generic play/youtube) ---
         _yt_controls: dict[str, str] = {
             # Playback
@@ -455,7 +469,46 @@ class Brain:
                     "parameters": {},
                 }
 
-        # --- YouTube / music ---
+        # --- Music streaming (MUST come before YouTube so "play song" → play_music) ---
+        _music_play_exact: dict[str, str] = {
+            "play song":   "play_music",
+            "play music":  "play_music",
+            "play a song": "play_music",
+            "sing":        "play_music",
+        }
+        for phrase, music_action in sorted(_music_play_exact.items(), key=lambda x: -len(x[0])):
+            if phrase in text:
+                return {"intent": "music_control", "action": music_action, "parameters": {}}
+
+        # "play <something>" where it is clearly a song (no video/youtube/watch/show)
+        _video_indicators = ("video", "on youtube", "youtube", "watch", "show")
+        if text.startswith("play ") and not any(ind in text for ind in _video_indicators):
+            query = text
+            for remove in [
+                "play ", "song ", "music ", "the song ", "a song ",
+                "please", "for me", "can you", "could you",
+                "jarvis ", "hey ", "find ",
+            ]:
+                query = query.replace(remove, "")
+            query = query.strip()
+            if query:
+                return {
+                    "intent": "music_control",
+                    "action": "play_music",
+                    "parameters": {"query": query},
+                }
+
+        # "sing <something>"
+        if text.startswith("sing "):
+            query = text[5:].strip()
+            if query:
+                return {
+                    "intent": "music_control",
+                    "action": "play_music",
+                    "parameters": {"query": query},
+                }
+
+        # --- YouTube / video ---
         if "youtube" in text or text.startswith("play "):
             query = text
             for remove in [

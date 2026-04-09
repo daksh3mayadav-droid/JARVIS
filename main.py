@@ -43,6 +43,10 @@ from utils.tars_personality import TARSPersonality
 
 # ─── JARVIS Application ───────────────────────────────────────────────────────
 
+# Conversational auto-listen settings
+_MAX_CONVERSATIONAL_FOLLOW_UPS = 3   # max back-to-back auto-listens after a question
+_FOLLOW_UP_LISTEN_TIMEOUT = 10.0     # seconds to wait for each follow-up utterance
+
 class JARVIS:
     """
     Top-level JARVIS AI assistant orchestrator.
@@ -96,6 +100,7 @@ class JARVIS:
         self._automator = None
         self._browser = None
         self._youtube = None
+        self._music_player = None
 
         # ── Voice ──────────────────────────────────────────────────────────
         # Load Vosk model once and share between Listener and WakeWordDetector
@@ -192,6 +197,14 @@ class JARVIS:
             from automation.youtube_control import YouTubeController
             self._youtube = YouTubeController(self.controller, self.browser)
         return self._youtube
+
+    @property
+    def music_player(self):
+        """Lazy-load MusicPlayer on first access."""
+        if self._music_player is None:
+            from automation.music_player import MusicPlayer
+            self._music_player = MusicPlayer()
+        return self._music_player
 
     # ─── Action Registry ──────────────────────────────────────────────────────
 
@@ -316,6 +329,15 @@ class JARVIS:
             # Memory
             "remember": lambda topic="", content="": self.memory.store_knowledge(topic, content),
             "recall": lambda query="": self._recall(query),
+
+            # Music streaming (no browser — pure audio via yt-dlp + mpv)
+            "play_music":       lambda query="": self.music_player.play(query),
+            "music_pause":      lambda: self.music_player.pause(),
+            "music_resume":     lambda: self.music_player.resume(),
+            "music_stop":       lambda: self.music_player.stop(),
+            "music_skip":       lambda: self.music_player.skip(),
+            "music_volume":     lambda level=50: self.music_player.set_volume(int(level)),
+            "music_now_playing": lambda: self.music_player.now_playing or "Nothing is playing.",
         })
 
     # ─── Main Loop ────────────────────────────────────────────────────────────
@@ -387,6 +409,25 @@ class JARVIS:
         finally:
             self.gui.update_status("Idle")
 
+    def _handle_text_input_return(self, text: str) -> str:
+        """Process a text command through the brain and return the response string."""
+        self.ui.print_user(text)
+        self.gui.update_status("Processing…", text[:40])
+        log.info("User input: %s", text)
+        try:
+            response = self.brain.process(text)
+            self.ui.print_jarvis(response)
+            self._speak(response, apply_personality=False)
+            return response
+        except Exception as exc:  # noqa: BLE001
+            err = self.personality.error(str(exc))
+            self.ui.error_message(err)
+            self._speak(err, apply_personality=False)
+            log.error("Input processing error: %s", exc)
+            return err
+        finally:
+            self.gui.update_status("Idle")
+
     def _on_wake_word(self) -> None:
         """Called when wake word 'Jarvis' is detected."""
         if self._listening_active:
@@ -401,7 +442,23 @@ class JARVIS:
 
         if text:
             self.ui.print_user(f"[Voice] {text}")
-            self._handle_text_input(text)
+            response = self._handle_text_input_return(text)
+
+            # Conversational mode: if JARVIS asked a question, auto-listen
+            follow_up_count = 0
+            while (
+                response
+                and response.rstrip().endswith("?")
+                and follow_up_count < _MAX_CONVERSATIONAL_FOLLOW_UPS
+            ):
+                self.ui.system_message("🎤 Listening for follow-up…")
+                self.gui.update_status("Listening…")
+                follow_text = self.listener.listen_once(timeout=_FOLLOW_UP_LISTEN_TIMEOUT)
+                if not follow_text:
+                    break
+                self.ui.print_user(f"[Voice] {follow_text}")
+                response = self._handle_text_input_return(follow_text)
+                follow_up_count += 1
         else:
             self.ui.system_message("Didn't catch that. Say 'Jarvis' to try again.")
 

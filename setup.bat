@@ -10,7 +10,7 @@ echo  ==========================================================================
 echo.
 
 :: ─── Check Python 3.10+ ───────────────────────────────────────────────────────
-echo [1/9] Checking Python version...
+echo [1/10] Checking Python version...
 python --version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Python not found. Please install Python 3.10+ from https://python.org
@@ -38,7 +38,7 @@ echo [OK] Python !PYVER! detected.
 
 :: ─── Create Virtual Environment ───────────────────────────────────────────────
 echo.
-echo [2/9] Creating virtual environment...
+echo [2/10] Creating virtual environment...
 if exist "venv" (
     echo [INFO] Virtual environment already exists. Skipping creation.
 ) else (
@@ -57,7 +57,7 @@ echo [OK] Virtual environment activated.
 
 :: ─── Install Requirements ──────────────────────────────────────────────────────
 echo.
-echo [3/9] Installing Python packages (this may take several minutes)...
+echo [3/10] Installing Python packages (this may take several minutes)...
 pip install --upgrade pip --quiet
 pip install -r requirements.txt --quiet
 if errorlevel 1 (
@@ -72,9 +72,30 @@ if errorlevel 1 (
 )
 echo [OK] Python packages installed.
 
+:: ─── Install mpv media player ─────────────────────────────────────────────────
+echo.
+echo [4/10] Checking mpv media player (required for music streaming)...
+where mpv >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] mpv not found. Attempting to install via winget...
+    winget install --id=mpv.mpv -e --silent >nul 2>&1
+    if errorlevel 1 (
+        echo [WARNING] winget install failed. Please install mpv manually:
+        echo           1. Download from: https://mpv.io/installation/
+        echo           2. Extract mpv.exe to a folder (e.g. C:\mpv\)
+        echo           3. Add that folder to your system PATH
+        echo           Without mpv, JARVIS cannot stream music directly.
+    ) else (
+        echo [OK] mpv installed via winget. You may need to restart your terminal
+        echo      for the PATH change to take effect.
+    )
+) else (
+    echo [OK] mpv already installed.
+)
+
 :: ─── Install PyTorch with CUDA for GTX 1650 ───────────────────────────────────
 echo.
-echo [4/9] Installing PyTorch with CUDA support (GTX 1650 - CUDA 12.1)...
+echo [5/10] Installing PyTorch with CUDA support (GTX 1650 - CUDA 12.1)...
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 --quiet
 if errorlevel 1 (
     echo [WARNING] CUDA PyTorch failed. Installing CPU version as fallback...
@@ -84,7 +105,7 @@ echo [OK] PyTorch installed.
 
 :: ─── Install Ollama ────────────────────────────────────────────────────────────
 echo.
-echo [5/9] Checking Ollama installation...
+echo [6/10] Checking Ollama installation...
 where ollama >nul 2>&1
 if errorlevel 1 (
     echo [INFO] Ollama not found. Downloading installer...
@@ -103,7 +124,7 @@ if errorlevel 1 (
 
 :: ─── Pull LLM Model ────────────────────────────────────────────────────────────
 echo.
-echo [6/9] Pulling LLM model (mistral - recommended for instruction following)...
+echo [7/10] Pulling LLM model (mistral - recommended for instruction following)...
 echo [INFO] This downloads ~4.1GB. Please wait...
 start "" /B ollama serve >nul 2>&1
 timeout /t 3 /nobreak >nul
@@ -124,7 +145,7 @@ if errorlevel 1 (
 
 :: ─── Download Vosk Model ───────────────────────────────────────────────────────
 echo.
-echo [7/9] Downloading Vosk speech recognition model...
+echo [8/10] Downloading Vosk speech recognition model...
 set VOSK_MODEL_DIR=models\vosk-model-small-en-us-0.15
 if exist "%VOSK_MODEL_DIR%" (
     echo [OK] Vosk model already present.
@@ -145,7 +166,7 @@ if exist "%VOSK_MODEL_DIR%" (
 
 :: ─── Verify GPU / CUDA ─────────────────────────────────────────────────────────
 echo.
-echo [8/9] Verifying CUDA / GTX 1650...
+echo [9/10] Verifying CUDA / GTX 1650...
 python -c "import torch; print('[OK] CUDA available:', torch.cuda.is_available()); print('[OK] GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None (CPU mode)')" 2>nul
 if errorlevel 1 (
     echo [WARNING] Could not verify CUDA. GPU acceleration may not be active.
@@ -153,7 +174,7 @@ if errorlevel 1 (
 
 :: ─── Initial System Scan ───────────────────────────────────────────────────────
 echo.
-echo [9/9] Running initial system scan...
+echo [10/10] Running initial system scan...
 python -c "
 import sys, os
 sys.path.insert(0, '.')

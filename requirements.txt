@@ -58,3 +58,10 @@ python-Levenshtein==0.25.1
 # Windows-specific (will be ignored on non-Windows)
 pywin32==306; sys_platform == "win32"
 comtypes==1.4.1; sys_platform == "win32"
+
+# Music streaming (no browser — yt-dlp extracts audio URL, mpv streams it)
+# NOTE: mpv must also be installed as a system application:
+#   Windows: winget install mpv  OR  https://mpv.io/installation/
+#   Then add mpv.exe to your PATH.
+yt-dlp>=2024.0.0
+python-mpv>=1.0.0
